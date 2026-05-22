@@ -145,11 +145,8 @@ describe('ModelDiscovery Plugin', () => {
 
       expect(config.provider?.ollama?.models).toBeDefined()
       expect(Object.keys(config.provider.ollama.models).length).toBe(2)
-      expect(mockFetch).toHaveBeenCalledTimes(2)
-      expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://127.0.0.1:11434/v1/models', expect.objectContaining({
-        method: 'GET'
-      }))
-      expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://127.0.0.1:11434/v1/model/info', expect.objectContaining({
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:11434/v1/models', expect.objectContaining({
         method: 'GET'
       }))
     })
@@ -183,11 +180,8 @@ describe('ModelDiscovery Plugin', () => {
       await pluginHooks.config(config)
 
       expect(config.provider.ollama.models['custom-model']).toBeDefined()
-      expect(mockFetch).toHaveBeenCalledTimes(2)
-      expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://127.0.0.1:11434/api/models', expect.objectContaining({
-        method: 'GET'
-      }))
-      expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://127.0.0.1:11434/v1/model/info', expect.objectContaining({
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:11434/api/models', expect.objectContaining({
         method: 'GET'
       }))
     })
@@ -258,7 +252,10 @@ describe('ModelDiscovery Plugin', () => {
             name: 'LiteLLM',
             options: {
               baseURL: 'http://127.0.0.1:4000/v1',
-              modelsDiscovery: {}
+              modelsDiscovery: {
+                modelInfoEndpoint: '/v1/model/info',
+                modelInfoFormat: 'litellm'
+              }
             },
             models: {}
           }
@@ -295,20 +292,15 @@ describe('ModelDiscovery Plugin', () => {
     })
 
     it('should skip embedding models even when model info is missing', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            data: [
-              { id: 'Qwen/Qwen3-VL-Embedding-8B', object: 'model', created: 1234567890, owned_by: 'openai' },
-              { id: 'Qwen/Qwen3-VL-32B-Instruct', object: 'model', created: 1234567890, owned_by: 'openai' }
-            ]
-          })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            { id: 'Qwen/Qwen3-VL-Embedding-8B', object: 'model', created: 1234567890, owned_by: 'openai' },
+            { id: 'Qwen/Qwen3-VL-32B-Instruct', object: 'model', created: 1234567890, owned_by: 'openai' }
+          ]
         })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ data: [] })
-        })
+      })
 
       const config: any = {
         provider: {
@@ -323,6 +315,7 @@ describe('ModelDiscovery Plugin', () => {
 
       await pluginHooks.config(config)
 
+      expect(mockFetch).toHaveBeenCalledTimes(1)
       expect(config.provider.litellm.models['Qwen/Qwen3-VL-Embedding-8B']).toBeUndefined()
       expect(config.provider.litellm.models['Qwen/Qwen3-VL-32B-Instruct']).toEqual(expect.objectContaining({
         id: 'Qwen/Qwen3-VL-32B-Instruct',

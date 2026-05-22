@@ -1,4 +1,4 @@
-import type { LiteLLMModelInfoEntry, LiteLLMModelInfoResponse, OpenAIModel, OpenAIModelsResponse } from '../types'
+import type { OpenAIModel, OpenAIModelsResponse } from '../types'
 
 const OPENAI_COMPATIBLE_MODELS_ENDPOINT = "/v1/models"
 
@@ -9,7 +9,7 @@ export interface ModelsDiscoveryResult {
 
 export interface ModelInfoDiscoveryResult {
   ok: boolean
-  entries: LiteLLMModelInfoEntry[]
+  data: unknown
 }
 
 export function normalizeBaseURL(baseURL: string): string {
@@ -78,16 +78,16 @@ export async function discoverModelInfoFromProvider(
     })
 
     if (!response.ok) {
-      return { ok: false, entries: [] }
+      return { ok: false, data: undefined }
     }
 
-    const data = (await response.json()) as LiteLLMModelInfoResponse
+    const data = await response.json()
     return {
       ok: true,
-      entries: data.data ?? [],
+      data,
     }
   } catch {
-    return { ok: false, entries: [] }
+    return { ok: false, data: undefined }
   }
 }
 

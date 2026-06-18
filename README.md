@@ -75,6 +75,17 @@ Discovery auth precedence is:
 
 Details and examples: [`docs/connect-and-auth.md`](docs/connect-and-auth.md)
 
+## Mimocode Compatibility
+
+This plugin is also compatible with Mimocode as an OpenCode-compatible host.
+
+When startup-time discovery needs to recover `/connect`-managed API credentials from the local auth store, the plugin selects the host data directory from runtime environment markers:
+
+- `OPENCODE=1` or no host marker: `~/.local/share/opencode/auth.json`
+- `MIMOCODE=1`: `~/.local/share/mimocode/auth.json`
+
+This keeps the same provider configuration model while allowing the plugin to work in both OpenCode and Mimocode environments.
+
 ## Documentation
 
 - Configuration guide: [`docs/configuration.md`](docs/configuration.md)

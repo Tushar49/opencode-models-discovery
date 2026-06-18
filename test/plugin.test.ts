@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { promises as fs } from 'node:fs'
 import { ModelDiscoveryPlugin } from '../src/index.ts'
 
 const mockFetch = vi.fn()
@@ -19,6 +20,10 @@ describe('ModelDiscovery Plugin', () => {
   beforeEach(async () => {
     mockFetch.mockClear()
     delete process.env.OPENCODE_AUTH_CONTENT
+    delete process.env.OPENCODE
+    delete process.env.OPENCODE_PID
+    delete process.env.MIMOCODE
+    delete process.env.MIMOCODE_PID
 
     mockClient = {
       app: {
@@ -52,6 +57,10 @@ describe('ModelDiscovery Plugin', () => {
 
   afterEach(() => {
     delete process.env.OPENCODE_AUTH_CONTENT
+    delete process.env.OPENCODE
+    delete process.env.OPENCODE_PID
+    delete process.env.MIMOCODE
+    delete process.env.MIMOCODE_PID
     vi.restoreAllMocks()
   })
 
@@ -342,6 +351,135 @@ describe('ModelDiscovery Plugin', () => {
         method: 'GET',
         headers: expect.objectContaining({
           Authorization: 'Bearer auth-store-key'
+        })
+      }))
+    })
+
+    it('should read the OpenCode host auth store when OPENCODE is set', async () => {
+      process.env.OPENCODE = '1'
+      process.env.OPENCODE_PID = '12345'
+
+      const readFileSpy = vi.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify({
+        test_provider: {
+          type: 'api',
+          key: 'host-auth-key'
+        }
+      }) as any)
+
+      mockClient.config.providers.mockRejectedValueOnce(new Error('provider resolution failed'))
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            { id: 'host-auth-model', object: 'model', created: 1234567890, owned_by: 'local' }
+          ]
+        })
+      })
+
+      const config: any = {
+        provider: {
+          test_provider: {
+            npm: '@ai-sdk/openai-compatible',
+            name: 'Test Provider',
+            options: { baseURL: 'http://127.0.0.1:4000/v1' },
+            models: {}
+          }
+        }
+      }
+
+      await pluginHooks.config(config)
+
+      expect(readFileSpy).toHaveBeenCalledWith(expect.stringMatching(/\/opencode\/auth\.json$/), 'utf8')
+      expect(config.provider.test_provider.models['host-auth-model']).toBeDefined()
+      expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:4000/v1/models', expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer host-auth-key'
+        })
+      }))
+    })
+
+    it('should default to the OpenCode host auth store when no host env is set', async () => {
+      const readFileSpy = vi.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify({
+        test_provider: {
+          type: 'api',
+          key: 'default-host-auth-key'
+        }
+      }) as any)
+
+      mockClient.config.providers.mockRejectedValueOnce(new Error('provider resolution failed'))
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            { id: 'default-host-auth-model', object: 'model', created: 1234567890, owned_by: 'local' }
+          ]
+        })
+      })
+
+      const config: any = {
+        provider: {
+          test_provider: {
+            npm: '@ai-sdk/openai-compatible',
+            name: 'Test Provider',
+            options: { baseURL: 'http://127.0.0.1:4000/v1' },
+            models: {}
+          }
+        }
+      }
+
+      await pluginHooks.config(config)
+
+      expect(readFileSpy).toHaveBeenCalledWith(expect.stringMatching(/\/opencode\/auth\.json$/), 'utf8')
+      expect(config.provider.test_provider.models['default-host-auth-model']).toBeDefined()
+      expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:4000/v1/models', expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer default-host-auth-key'
+        })
+      }))
+    })
+
+    it('should read the Mimocode host auth store when MIMOCODE is set', async () => {
+      process.env.MIMOCODE = '1'
+      process.env.MIMOCODE_PID = '67890'
+
+      const readFileSpy = vi.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify({
+        test_provider: {
+          type: 'api',
+          key: 'mimo-auth-key'
+        }
+      }) as any)
+
+      mockClient.config.providers.mockRejectedValueOnce(new Error('provider resolution failed'))
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            { id: 'mimo-auth-model', object: 'model', created: 1234567890, owned_by: 'local' }
+          ]
+        })
+      })
+
+      const config: any = {
+        provider: {
+          test_provider: {
+            npm: '@ai-sdk/openai-compatible',
+            name: 'Test Provider',
+            options: { baseURL: 'http://127.0.0.1:4000/v1' },
+            models: {}
+          }
+        }
+      }
+
+      await pluginHooks.config(config)
+
+      expect(readFileSpy).toHaveBeenCalledWith(expect.stringMatching(/\/mimocode\/auth\.json$/), 'utf8')
+      expect(config.provider.test_provider.models['mimo-auth-model']).toBeDefined()
+      expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:4000/v1/models', expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer mimo-auth-key'
         })
       }))
     })

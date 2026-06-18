@@ -31,6 +31,8 @@ interface OpenCodeAuth {
   key?: string
 }
 
+type HostClient = 'opencode' | 'mimocode'
+
 const RESOLVED_PROVIDERS_TIMEOUT_MS = 250
 
 async function getResolvedProvidersByID(
@@ -74,12 +76,25 @@ async function getResolvedProvidersByID(
   }
 }
 
-function getOpenCodeAuthFile(): string | undefined {
+function detectHostClient(): HostClient {
+  if (process.env.OPENCODE === '1') {
+    return 'opencode'
+  }
+
+  if (process.env.MIMOCODE === '1') {
+    return 'mimocode'
+  }
+
+  return 'opencode'
+}
+
+function getHostAuthFile(): string | undefined {
   if (!xdgData) {
     return undefined
   }
 
-  return path.join(xdgData, 'opencode', 'auth.json')
+  const hostClient = detectHostClient()
+  return path.join(xdgData, hostClient, 'auth.json')
 }
 
 async function getOpenCodeAuth(providerName: string, logger: PluginLogger): Promise<OpenCodeAuth | undefined> {
@@ -96,14 +111,14 @@ async function getOpenCodeAuth(providerName: string, logger: PluginLogger): Prom
     })
   }
 
-  const file = getOpenCodeAuthFile()
+  const file = getHostAuthFile()
   if (file) {
     try {
       const auths = JSON.parse(await fs.readFile(file, 'utf8')) as Record<string, OpenCodeAuth>
       return auths[providerName] ?? auths[normalizedProviderName] ?? auths[`${normalizedProviderName}/`]
     } catch (error: any) {
       if (error?.code !== 'ENOENT') {
-        logger.debug('Could not read OpenCode auth store', {
+        logger.debug('Could not read host auth store', {
           error: error instanceof Error ? error.message : String(error),
         })
       }

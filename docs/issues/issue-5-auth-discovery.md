@@ -23,12 +23,18 @@ Discovery credential resolution now uses this precedence order:
 
 1. `provider.<name>.options.apiKey`
 2. resolved provider credentials from OpenCode, when available quickly enough during startup
-3. a fallback read of the OpenCode auth store for same-id `type: "api"` credentials
+3. a fallback read of the host auth store for same-id `type: "api"` credentials
 
 The fallback read path is:
 
 1. `OPENCODE_AUTH_CONTENT`
-2. OpenCode auth file derived from the same `xdg-basedir` data location OpenCode uses for `Global.Path.data`
+2. Host auth file derived from the same `xdg-basedir` data location used by the active compatible client
+
+The host auth file is selected from runtime environment variables:
+
+- `OPENCODE=1` -> `~/.local/share/opencode/auth.json`
+- `MIMOCODE=1` -> `~/.local/share/mimocode/auth.json`
+- no host marker -> default to `~/.local/share/opencode/auth.json`
 
 This keeps explicit config as the highest-priority source, while allowing `/connect`-managed credentials to work without duplicating secrets in `opencode.json`.
 
@@ -71,6 +77,7 @@ The implementation was validated with:
 - explicit `apiKey` providers still discovering correctly
 - `/connect`-managed custom providers discovering correctly after reconnect/bootstrap
 - fallback behavior through `OPENCODE_AUTH_CONTENT`
+- host-specific auth store reads for OpenCode and Mimocode
 - timeout handling when resolved provider lookup is slow or unavailable
 - test coverage for precedence and failure cases
 

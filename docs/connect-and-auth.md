@@ -35,7 +35,7 @@ Discovery requests resolve credentials in this order:
 
 1. `provider.<name>.options.apiKey`
 2. OpenCode resolved provider key, when available during plugin startup
-3. OpenCode `/connect` auth store for same-id `type: "api"` credentials
+3. Host auth store for same-id `type: "api"` credentials
 
 This preserves existing explicit `apiKey` configs while also allowing custom providers to rely on `/connect` without duplicating secrets in `opencode.json`.
 
@@ -52,5 +52,8 @@ This preserves existing explicit `apiKey` configs while also allowing custom pro
 ## Notes
 
 - OpenCode's provider resolution API can time out inside the `config` hook, so the plugin includes a fallback for `/connect` API-key credentials.
-- That fallback first respects `OPENCODE_AUTH_CONTENT`, then reads the same OpenCode auth store location derived from `xdg-basedir` that OpenCode uses for `Global.Path.data`.
+- That fallback first respects `OPENCODE_AUTH_CONTENT`, then reads a host-specific auth store location derived from `xdg-basedir`.
+- When `OPENCODE=1` is present, the plugin reads `~/.local/share/opencode/auth.json`.
+- When `MIMOCODE=1` is present, the plugin reads `~/.local/share/mimocode/auth.json`.
+- When neither host marker is present, the plugin defaults to `~/.local/share/opencode/auth.json`.
 - The plugin never writes the recovered key back into `opencode.json` and never logs the secret value.

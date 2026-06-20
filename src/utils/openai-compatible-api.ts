@@ -1,3 +1,5 @@
+import http from 'node:http'
+import https from 'node:https'
 import type { OpenAIModel, OpenAIModelsResponse } from '../types'
 
 const OPENAI_COMPATIBLE_MODELS_ENDPOINT = "/v1/models"
@@ -25,37 +27,66 @@ export function buildAPIURL(baseURL: string, endpoint: string = OPENAI_COMPATIBL
   return `${normalized}${endpoint}`
 }
 
+function fetchViaHttpModule(urlStr: string, apiKey?: string): Promise<ModelsDiscoveryResult> {
+  return new Promise((resolve) => {
+    const urlObj = new URL(urlStr)
+    const mod = urlObj.protocol === 'https:' ? https : http
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`
+    }
+    const req = mod.get(urlObj, { headers, timeout: 5000 }, (res) => {
+      let data = ''
+      res.on('data', (chunk: string) => data += chunk)
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data) as OpenAIModelsResponse
+          resolve({ ok: true, models: parsed.data ?? [] })
+        } catch {
+          resolve({ ok: false, models: [] })
+        }
+      })
+      res.on('error', () => resolve({ ok: false, models: [] }))
+    })
+    req.on('error', () => resolve({ ok: false, models: [] }))
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, models: [] }) })
+  })
+}
+
 export async function discoverModelsFromProvider(
   baseURL: string,
   apiKey?: string,
   endpoint: string = OPENAI_COMPATIBLE_MODELS_ENDPOINT
 ): Promise<ModelsDiscoveryResult> {
+  const url = buildAPIURL(baseURL, endpoint)
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  }
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`
+  }
+
+  // Try fetch() first (works in most environments)
   try {
-    const url = buildAPIURL(baseURL, endpoint)
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    }
-    if (apiKey) {
-      headers["Authorization"] = `Bearer ${apiKey}`
-    }
     const response = await fetch(url, {
       method: "GET",
       headers,
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(5000),
     })
-
-    if (!response.ok) {
-      return { ok: false, models: [] }
-    }
-
-    const data = (await response.json()) as OpenAIModelsResponse
-    return {
-      ok: true,
-      models: data.data ?? [],
+    if (response.ok) {
+      const data = (await response.json()) as OpenAIModelsResponse
+      if (data.data && data.data.length > 0) {
+        return { ok: true, models: data.data }
+      }
     }
   } catch {
-    return { ok: false, models: [] }
+    // fetch failed (e.g. undici timeout on some servers) — fall through to http module
   }
+
+  // Fallback: use Node.js http/https module (more reliable with some servers like OmniRoute)
+  return fetchViaHttpModule(url, apiKey)
 }
 
 export async function discoverModelInfoFromProvider(
@@ -63,50 +94,80 @@ export async function discoverModelInfoFromProvider(
   apiKey?: string,
   endpoint: string = "/v1/model/info"
 ): Promise<ModelInfoDiscoveryResult> {
+  const url = buildAPIURL(baseURL, endpoint)
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  }
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`
+  }
+
   try {
-    const url = buildAPIURL(baseURL, endpoint)
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    }
-    if (apiKey) {
-      headers["Authorization"] = `Bearer ${apiKey}`
-    }
     const response = await fetch(url, {
       method: "GET",
       headers,
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(5000),
     })
-
-    if (!response.ok) {
-      return { ok: false, data: undefined }
-    }
-
-    const data = await response.json()
-    return {
-      ok: true,
-      data,
+    if (response.ok) {
+      const data = await response.json()
+      return { ok: true, data }
     }
   } catch {
-    return { ok: false, data: undefined }
+    // fall through to http module fallback
   }
+
+  return new Promise((resolve) => {
+    const urlObj = new URL(url)
+    const mod = urlObj.protocol === 'https:' ? https : http
+    const req = mod.get(urlObj, { headers, timeout: 5000 }, (res) => {
+      let data = ''
+      res.on('data', (chunk: string) => data += chunk)
+      res.on('end', () => resolve({ ok: true, data: JSON.parse(data) }))
+      res.on('error', () => resolve({ ok: false, data: undefined }))
+    })
+    req.on('error', () => resolve({ ok: false, data: undefined }))
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, data: undefined }) })
+  })
 }
 
 export async function fetchModelsDirect(baseURL: string, endpoint: string = OPENAI_COMPATIBLE_MODELS_ENDPOINT): Promise<string[]> {
+  const url = buildAPIURL(baseURL, endpoint)
+  const headers = { "Content-Type": "application/json" }
+
   try {
-    const url = buildAPIURL(baseURL, endpoint)
     const response = await fetch(url, {
       method: "GET",
-      signal: AbortSignal.timeout(3000),
+      headers,
+      signal: AbortSignal.timeout(5000),
     })
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    if (response.ok) {
+      const data = (await response.json()) as OpenAIModelsResponse
+      const ids = data.data?.map(model => model.id) || []
+      if (ids.length > 0) return ids
     }
-
-    const data = (await response.json()) as OpenAIModelsResponse
-    return data.data?.map(model => model.id) || []
   } catch {
-    return []
+    // fall through to http module fallback
   }
+
+  return new Promise((resolve) => {
+    const urlObj = new URL(url)
+    const mod = urlObj.protocol === 'https:' ? https : http
+    const req = mod.get(urlObj, { headers, timeout: 5000 }, (res) => {
+      let data = ''
+      res.on('data', (chunk: string) => data += chunk)
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data) as OpenAIModelsResponse
+          resolve(parsed.data?.map(model => model.id) || [])
+        } catch {
+          resolve([])
+        }
+      })
+      res.on('error', () => resolve([]))
+    })
+    req.on('error', () => resolve([]))
+    req.on('timeout', () => { req.destroy(); resolve([]) })
+  })
 }
 
 export async function autoDetectOpenAICompatibleProvider(): Promise<{ name: string; baseURL: string } | null> {

@@ -278,6 +278,8 @@ export async function enhanceConfig(
           const modelConfig: any = {
             id: model.id,
             name: smartModelNameEnabled ? formatModelName(model) : model.id,
+            tool_call: model.capabilities?.tool_calling ?? false,
+            reasoning: model.capabilities?.reasoning ?? false,
           }
 
           if (owner) {
@@ -286,8 +288,9 @@ export async function enhanceConfig(
 
           if (modelType === 'chat') {
             chatModelsCount++
+            const visionCapable = model.capabilities?.vision ?? false
             modelConfig.modalities = {
-              input: ["text", "image"],
+              input: visionCapable ? ["text", "image"] : ["text"],
               output: ["text"]
             }
           }
